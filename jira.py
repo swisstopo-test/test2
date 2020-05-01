@@ -4,9 +4,13 @@
 import requests
 from requests.auth import HTTPBasicAuth
 import json
+import sys
 
+username = sys.argv[1]
+password = sys.argv[2]
 
-auth = HTTPBasicAuth("simon.berthoud@swisstopo.ch", "XXXXXXX")
+auth = HTTPBasicAuth(username, password)
+
 url = "https://jira-integration.beecollaboration.com"
 
 key = "BGDIDI_KB-2427"   #exemple de clé pour une issue (ici intégration). On va aller cherche les projets main puis ensuite les sous-tâches associés (subtask)
@@ -34,7 +38,8 @@ page = 0
 maxResults = 50
 total = 1
 while page < total:
-    response = requests.get(url + '/rest/api/2/search?jql=project=BGDIDI_KB&startAt={}&maxResults={}'.format(page, maxResults), auth=("simon.berthoud@swisstopo.ch", "XXXXXXX"))
+    response = requests.get(url + '/rest/api/2/search?jql=project=BGDIDI_KB&startAt={}&maxResults={}'.format(page, maxResults), auth=auth)
+    print(response.text)
     payload = response.json()
     # payload
     # {
@@ -99,8 +104,9 @@ with open('epics_to_create.json','w') as f:
 
 # len(key) == len(summary) == len(description)
 for issue_key,epic in epics.items():          #At each iteration we create an epic by calling the function create_epic
+    print(epic)
+    #retour = requests.post(URL, data=epic)
 
-    retour = requests.post(URL, data=epic)
     # retour contains info about epic id
     response = retour.json()
 
@@ -110,9 +116,10 @@ for issue_key,epic in epics.items():          #At each iteration we create an ep
             issue_key
         ]
     }
-    requests.post(url + '/rest/agile/1.0/epic/{epicKey}/issue'.format(epicKey=response['key']), json=payload, auth=auth)
+    print(payload)
+    # requests.post(url + '/rest/agile/1.0/epic/{epicKey}/issue'.format(epicKey=response['key']), json=payload, auth=auth)
 
-    return retour.json()
+    #return retour.json()
 
 
 #Create an Epic:
@@ -124,9 +131,10 @@ for issue_key,epic in epics.items():          #At each iteration we create an ep
 
 
 def assign_issue_to_epic(epic, issue):
-   	issue['epic'] = epic['key']
-    response = request.post(URL, json=issue, auth)
-    if not response.stat
+    issue['epic'] = epic['key']
+    response = request.post(URL, json=issue, auth=auth)
+    if not response.status_code == 200:
+        print("Error",response.text)
     return response.json()
 
 

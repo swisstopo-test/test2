@@ -285,6 +285,20 @@ for issue_key,epic in epics.items():          #At each iteration we create an ep
 # -> I think for our installation it's 'customfield_10007'
 
 
+# =========================================================================================================================================================
+#We extract the values from BGDI Web publication, MGDI publication and MGDI metadata and acceptance that we will use to build tasks
+
+
+for issue in payload['issues']:
+    if name == 'BGDI Web publication' or name =='MGDI publication' or name == 'MGDI metadata and acceptance':
+#        if issue['customfield_100006'] == 'null':
+            task = create_issue(summary=issue['summary'], description=issue['description'])
+            task[issue['key']] = task
+
+
+
+
+
 
 def assign_issue_to_epic(epic, issue):
     issue['epic'] = epic['key']

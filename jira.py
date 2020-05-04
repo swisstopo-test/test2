@@ -199,7 +199,17 @@ while page < total:
                 epics[parent_key]['issues'] = []
                 epics[parent_key]['issues'].append(gdwh_issue)
 
-            # create content for 'BGDI web publication'/'MGDI publication'/'MGDI metadata and acceptance'
+                # create content for 'BGDI web publication'/'MGDI publication'/'MGDI metadata and acceptance'
+                
+                subtask_key = issue['key']
+                 
+                task[subtask_key] = {}
+                task[subtask_key]['content']=create_issue(
+                        summary=issue['fields']['summary']
+                        description=issue['fields']['description']
+                        labels=issue['fields']['label']
+                )
+
             # ---------------------------------------
             # 
             #       TODO

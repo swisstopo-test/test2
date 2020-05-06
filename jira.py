@@ -7,6 +7,9 @@ import json
 import sys
 import urllib
 import pprint
+import dateutil.parser
+import traceback
+
 
 class JiraApi:
 
@@ -31,7 +34,7 @@ class JiraApi:
             url,
             auth=self.auth, 
             headers=headers,
-            verify=False
+            verify=True
         )
         return response
 
@@ -55,7 +58,7 @@ bgdi_main_issues = {}
 # ----------------------------------------------------------------------
 
 # Helper function to create an issue structure
-def create_issue(summary, description, labels=None):
+def create_issue(key, summary, description, component, labels=None):
     # """
     # {
     #     "fields": {
@@ -84,8 +87,25 @@ def create_issue(summary, description, labels=None):
             "issuetype": {
                 "name": "Task"
             },
-            "labels": labels
-        }
+            "labels": labels,
+            "components": [{"name":component}]
+        },
+       #  "update":{
+       #    "issuelinks":[
+       #       {
+       #          "add":{
+       #             "type":{
+       #                "name":"Clones",
+       #                "inward":"is cloned by",
+       #                "outward":"clones"
+       #             },
+       #             "outwardIssue":{
+       #                "key":key
+       #             }
+       #          }
+       #       }
+       #    ]
+       # }
     }
     return issue
     
@@ -116,13 +136,22 @@ def create_epic(summary, description, labels=None):      #We build the strcture 
     return epic
 
 
+def create_comment(author, body):
+    return {
+        "author" : {
+            "name": author
+        },
+        "body": body
+    }
+
+
 # Save all stuff that needs to be created, epics
 # along with a list of issues that belong to the epic
 epics = {}
 # {
 #     "BGDIDI_KB-2417": {
 #         "content": { ... },
-#         "issues": []
+#         "issues": {}
 # }
 
 
@@ -132,7 +161,7 @@ epics = {}
 
 # init values for paginated calls
 page = 0
-maxResults = 1
+maxResults = 50
 total = 1
 
 while page < total:
@@ -155,68 +184,119 @@ while page < total:
     #      {...}
 
     for issue in payload['issues']:
-        # print(issue)
-        # name of the issuetype
-        name = issue['fields']['issuetype']['name']
-        
-        # we look for issues of type subtask
-        if name == 'BGDI Web publication' or name =='MGDI publication' or name == 'MGDI metadata and acceptance':
-            # check if a new epic for the parent was already
-            # added to 'epics' data structure
-            parent_key = issue['fields']['parent']['key']
-            if parent_key not in epics:
+        try:
+            # print(issue)
+            # name of the issuetype
+            issuetype = issue['fields']['issuetype']['name']
+            
+            # we look for issues of type subtask
+            if issuetype == 'BGDI Web publication' or issuetype =='MGDI publication' or issuetype == 'MGDI metadata and acceptance':
+                # check if a new epic for the parent was already
+                # added to 'epics' data structure
+                parent_key = issue['fields']['parent']['key']
+                if parent_key not in epics:
 
-                # in order to get all information about the issue,
-                # we have to make a second call
-                response = api.get(url=issue['fields']['parent']['self'])
-                parent = response.json()
-                fields = parent['fields']
-                
+                    # in order to get all information about the issue,
+                    # we have to make a second call
+                    response = api.get(url=issue['fields']['parent']['self'])
+                    parent = response.json()
+                    fields = parent['fields']
+                    
 
-                # create the content for the epic
-                epics[parent_key] = {}
-                epics[parent_key]['content'] = create_epic(
-                    summary=parent['fields']['summary'],
-                    description=parent['fields']['description'],
-                    labels=parent['fields']['labels']
+                    # create the content for the epic
+                    epics[parent_key] = {}
+                    epics[parent_key]['content'] = create_epic(
+                        summary=parent['fields']['summary'],
+                        description=parent['fields']['description'],
+                        labels=parent['fields']['labels']
+                    )
+
+                    # create the content for the GDWH (former bgdi main) issue
+
+                    # We add some information that was in customfields to the description
+                    gdwh_description = parent['fields']['description'] or ''
+                    gdwh_description += f"\n------------------------\n"
+                    gdwh_description += f"__Status: {parent['fields']['status']['name']}\n"
+                    gdwh_description += f"__MuM_GDS_link: {parent['fields']['customfield_10505']}\n"
+                    gdwh_description += f"__Original_Data_Path: {parent['fields']['customfield_10606']}\n"
+                    
+                    comments = []
+                    if 'comment' in parent['fields'] and parent['fields']['comment']['comments']:
+                        for _comment in parent['fields']['comment']['comments']:
+                            created = dateutil.parser.parse(_comment['created'])
+                            comment_date = created.strftime('%d %b %Y at %H:%M')
+                            body = f"_{_comment['author']['displayName']} commented on {comment_date}:_\n\n"
+                            body += _comment['body']
+                            comments.append({"body": body})
+
+
+                    gdwh_issue = create_issue(
+                        key=parent_key,
+                        summary="[GDWH] " + parent['fields']['summary'],
+                        description=gdwh_description,
+                        component='GDWH',
+                        labels=parent['fields']['labels']
+                    )
+                    
+                    epics[parent_key]['issues'] = {}
+                    epics[parent_key]['issues'][parent_key] = {}
+                    epics[parent_key]['issues'][parent_key]['issue'] = gdwh_issue
+                    epics[parent_key]['issues'][parent_key]['comments'] = comments
+
+
+                # create content for 'BGDI web publication'/'MGDI publication'/'MGDI metadata and acceptance'
+                description = issue['fields']['description'] or ''
+                if issuetype == 'BGDI Web publication':
+                    description += f"\n------------------------\n"
+                    description += f"__Status: {issue['fields']['status']['name']}\n"
+                    description += f"__Category: {issue['fields']['customfield_10501']['value']}\n"
+                    description += f"__MuM_PubL_link: {issue['fields']['customfield_10506']}\n"
+                    description += f"__GDWH_export_link: {issue['fields']['customfield_10503']}\n"
+                    description += f"__Testlink_viewer: {issue['fields']['customfield_10507']}\n"
+                    component = 'WEB'
+                else:
+                    component = 'MGDI'
+                subtask = create_issue(
+                        key=issue['key'],
+                        summary="[WEB] " + issue['fields']['summary'],
+                        description=description,
+                        component=component,
+                        labels=issue['fields']['labels']
                 )
 
-                # create the content for the GDWH (former bgdi main) issue
+                # for the comments we need to make another call
+                resp = api.get(url=issue['self'])
+                issue = resp.json()
+                # pprint.pprint(issue)
+                comments = []
+                if 'comment' in issue['fields'] and issue['fields']['comment']['comments']:
+                    for _comment in issue['fields']['comment']['comments']:
+                        created = dateutil.parser.parse(_comment['created'])
+                        comment_date = created.strftime('%d %b %Y at %H:%M')
+                        body = f"_{_comment['author']['displayName']} commented on {comment_date}:_\n\n"
+                        body += _comment['body']
+                        comments.append({"body": body})
 
-                # We add some information that was in customfields to the description
-                gdwh_description = parent['fields']['description']
-                gdwh_description += f"\n------------------------\n"
-                gdwh_description += f"__Status: {parent['fields']['status']['name']}\n"
-                gdwh_description += f"__MuM_GDS_link: {parent['fields']['customfield_10505']}\n"
-                gdwh_description += f"__Original_Data_Path: {parent['fields']['customfield_10606']}\n"
-                
-                gdwh_issue = create_issue(
-                    summary="[GDWH] " + parent['fields']['summary'],
-                    description=gdwh_description,
-                    labels=parent['fields']['labels']
-                )
-                
-                epics[parent_key]['issues'] = []
-                epics[parent_key]['issues'].append(gdwh_issue)
+                # add to the list of tasks that will belong to the epic
+                epics[parent_key]['issues'][issue['key']] = {}
+                epics[parent_key]['issues'][issue['key']]['issue'] = subtask
+                epics[parent_key]['issues'][issue['key']]['comments'] = comments
 
-            # create content for 'BGDI web publication'/'MGDI publication'/'MGDI metadata and acceptance'
-            subtask = create_issue(
-                    summary=issue['fields']['summary'],
-                    description=issue['fields']['description'],
-                    labels=issue['fields']['labels']
-            )
-            # add to the list of tasks that will belong to the epic
-            epics[parent_key]['issues'].append(subtask)
-
-
+        except Exception as e:
+            pprint.pprint(issue)
+            traceback.print_tb()
+            print(e)
 
     # increase page index by one
     page += 1
 
     # Disabled until we wanna process everything
-    # total = payload['total']
+    total = payload['total']
 
 
 # Save all stuff that needs to be created to file
 with open('epics_to_create.json','w') as f:
     f.write(json.dumps(epics, indent=4))
+
+
+

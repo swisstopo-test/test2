@@ -249,7 +249,8 @@ while page < total:
                 if issuetype == 'BGDI Web publication':
                     description += f"\n------------------------\n"
                     description += f"__Status: {issue['fields']['status']['name']}\n"
-                    description += f"__Category: {issue['fields']['customfield_10501']['value']}\n"
+                    if 'customfield_10501' in issue['fields'] and 'value' in issue['fields']['customfield_10501']:
+                        description += f"__Category: {issue['fields']['customfield_10501']['value']}\n"
                     description += f"__MuM_PubL_link: {issue['fields']['customfield_10506']}\n"
                     description += f"__GDWH_export_link: {issue['fields']['customfield_10503']}\n"
                     description += f"__Testlink_viewer: {issue['fields']['customfield_10507']}\n"
@@ -284,7 +285,7 @@ while page < total:
 
         except Exception as e:
             pprint.pprint(issue)
-            traceback.print_tb()
+            traceback.print_exc()
             print(e)
 
     # increase page index by one

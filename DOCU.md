@@ -8,3 +8,5 @@ This doc is automatically integrated into the global structurizr doc.
 
 some diagram
 ![](embed:mf-chsdi3)
+
+Some changes for testing branch protection

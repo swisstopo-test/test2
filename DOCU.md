@@ -13,4 +13,3 @@ Some changes for testing branch protection
 
 Do some other docu change for testing branch protection
 
-Do some other docu change for testing branch protection

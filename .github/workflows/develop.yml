@@ -12,4 +12,4 @@ jobs:
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         #version_assertion_command: 'grep -q "\"version\": \"$version\"" package.json'
-        version_assertion_command: 'cat VERSION.py | awk -F= \'{print $2}\' | sed \"s/\'//g\"'
+        version_assertion_command: "cat VERSION.py | awk -F= '{print $2}' | sed \"s/'//g\""
